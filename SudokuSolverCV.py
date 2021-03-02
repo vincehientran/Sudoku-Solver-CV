@@ -165,7 +165,6 @@ class SudokuCV():
         return (topLeftPoint, topRightPoint, bottomLeftPoint, bottomRightPoint
         , avgLeft, avgBottom, avgRight, avgTop)
 
-
     # crop and warp the sudoku board
     def cropAndWarp(self, points):
         sides = [(points[0],points[1]), (points[1],points[2]), (points[2],points[3]), (points[3],points[0])]
@@ -180,9 +179,6 @@ class SudokuCV():
         M = cv2.getPerspectiveTransform(originalPoints, warpedPoints)
         self.image = cv2.warpPerspective(self.image, M, (int(maxSideDistance), int(maxSideDistance)) )
 
-        cv2.imshow('Cropped and Warped Image', self.image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
 
         middleLeft = [0, int(maxSideDistance//2)]
         middleBottom = [int(maxSideDistance//2), int(maxSideDistance)-1]
@@ -290,35 +286,88 @@ class SudokuCV():
         bottomHalf = np.concatenate((quadrantBottomLeft, quadrantBottomRight), axis=1)
         self.image = np.concatenate((topHalf, bottomHalf), axis=0)
 
+        # initalize masks so we can remove the horizontal and vertical lines from the image
+        horizontal = np.copy(self.image)
+        vertical = np.copy(self.image)
+        horizontal = cv2.blur(horizontal,(2,2))
+        vertical = cv2.blur(vertical,(2,2))
+
+        # make a mask for the horizontal lines
+        cols = horizontal.shape[1]
+        horizontal_size = cols // 10
+        horizontalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_size, 1))
+        horizontal = cv2.erode(horizontal, horizontalStructure)
+        horizontal = cv2.dilate(horizontal, horizontalStructure)
+        horizontal = cv2.blur(horizontal,(2,2))
+        horizontal = (255-horizontal)
+        horizontal = cv2.threshold(horizontal,250,255,cv2.THRESH_BINARY)[1]
+
+        # make a mask for the horizontal lines
+        rows = vertical.shape[0]
+        verticalsize = rows // 10
+        verticalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (1, verticalsize))
+        vertical = cv2.erode(vertical, verticalStructure)
+        vertical = cv2.dilate(vertical, verticalStructure)
+        vertical = cv2.blur(vertical,(2,2))
+        vertical = (255-vertical)
+        vertical = cv2.threshold(vertical,250,255,cv2.THRESH_BINARY)[1]
+
+        # apply both masks to the image
+        self.image = cv2.bitwise_and(self.image, horizontal)
+        self.image = cv2.bitwise_and(self.image, vertical)
+
+        cv2.imshow('Cropped and Warped Image', self.image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
     # crop out all 81 cells and
     # run each cell image through the convolutional network
     def runCNN(self, model):
         print(self.board)
 
         cellSize = 450//9
-        for j in range(9):
+        for i in range(9):
 
-            for i in range(9):
+            for j in range(9):
+
+                # crop out the cell
                 topLeft = (i * cellSize, j * cellSize)
                 bottomRight = ((i + 1) * cellSize, (j + 1) * cellSize)
                 cellImage = self.image[topLeft[0]:bottomRight[0], topLeft[1]:bottomRight[1]]
                 numberImageZoom = self.image[topLeft[0]+10:bottomRight[0]-10, topLeft[1]+10:bottomRight[1]-10]
                 numberImage = self.image[topLeft[0]+5:bottomRight[0]-5, topLeft[1]+5:bottomRight[1]-5]
 
-                # count white pixels
+                # count white pixels in the cell
                 sumOfWhitePixels = 0
                 for x in range(len(numberImageZoom[0])):
                     for y in range(len(numberImageZoom)):
                         if numberImageZoom[x][y] > 127:
                             sumOfWhitePixels += 1
 
-                # if there are more than 10% white pixel
+                # if there are more than 5% white pixel, then predict the number using the CNN
                 if sumOfWhitePixels > ((cellSize-20)**2)*0.05:
-                    #modelPrediction = model.predict_classes(numberImage,verbose=0)
-                    #print(modelPrediction[0])
-                    cv2.imshow('Cropped and Warped Image', numberImage)
-                    cv2.waitKey(0)
-                    cv2.destroyAllWindows()
+                    #cellImage = cv2.GaussianBlur(cellImage,(3,3),0)
+
+                    ''' # zoom out number???
+                    h,w = cellImage.shape[0:2]
+                    base=np.zeros((h+10,w+10), np.uint8)
+                    base[5:h+5,5:w+5] = cellImage'''
+
+                    cellImage = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_LINEAR)
+                    temp = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_LINEAR)
+                    cellImage = cellImage.reshape((1, 28, 28, 1))
+                    cellImage = cellImage.astype('float32') / 255
+                    modelPrediction = model.predict_classes(cellImage,verbose=0)
+
+                    print('\n\n',modelPrediction[0],'\n\n')
+
+                    cv2.imshow('Cropped and Warped Image', temp)
+                    key = cv2.waitKey(0)
+                    if key == ord('q'):
+                        cv2.destroyAllWindows()
+                        return
+                    else:
+                        cv2.destroyAllWindows()
 
 
 def main():
