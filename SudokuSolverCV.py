@@ -1,15 +1,32 @@
 import cv2
 import numpy as np
 import sys
+from keras.models import model_from_json
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import Dropout
+from keras.layers import Flatten
+from keras.layers.convolutional import Conv2D
+from keras.layers.convolutional import MaxPooling2D
+from keras.utils import np_utils
 
 class SudokuCV():
     def __init__(self, imageName):
+        self.board = np.zeros((9,9), dtype=int)
         image = cv2.imread(imageName)
         self.image = cv2.resize(image, (450,450), interpolation = cv2.INTER_AREA)
         self.extractBoard()
         contour = self.boardContour(self.image)
         cornersAndMidPoints = self.findCornersAndMidpoints(contour)
         self.cropAndWarp(cornersAndMidPoints)
+
+        json = open('model.json', 'r')
+        loadedModelJson = json.read()
+        json.close()
+        model = model_from_json(loadedModelJson)
+        model.load_weights("model.h5")
+
+        self.runCNN(model)
 
     # extract the sudoku board from the image
     def extractBoard(self):
@@ -155,7 +172,7 @@ class SudokuCV():
         sideDistances = []
         for endpointX, endpointY in sides:
             sideDistances.append(np.linalg.norm(endpointX-endpointY))
-        maxSideDistance = max(sideDistances)
+        maxSideDistance = 450
 
         # after cropping and warping, the 4 corners of the board will be the 4 corners of the image
         warpedPoints = np.array([[0, 0], [maxSideDistance - 1, 0], [0, maxSideDistance - 1], [maxSideDistance - 1, maxSideDistance - 1]], dtype='float32')
@@ -177,52 +194,94 @@ class SudokuCV():
         bottomConcaved = False
         rightConcaved = False
         topConcaved = False
-        while middleLeft[0] < 30 and self.image[middleLeft[1],middleLeft[0]] < 200:
+        while middleLeft[0] < maxSideDistance-1 and self.image[middleLeft[1],middleLeft[0]] < 200:
             # move rightward
             middleLeft[0] += 1
-        if middleLeft[0] == 30:
+        if middleLeft[0] > 30:
             leftConcaved = True
 
-        while middleBottom[1] > maxSideDistance-30 and self.image[middleBottom[1],middleBottom[0]] < 200:
+        while middleBottom[1] > 0 and self.image[middleBottom[1],middleBottom[0]] < 200:
             # move rightward
             middleBottom[1] -= 1
-        if middleBottom[1] == maxSideDistance-30:
+        if middleBottom[1] < maxSideDistance-30:
             bottomConcaved = True
 
-        while middleRight[0] > maxSideDistance-30 and self.image[middleRight[1],middleRight[0]] < 200:
+        while middleRight[0] > 0 and self.image[middleRight[1],middleRight[0]] < 200:
             # move rightward
             middleRight[0] -= 1
-        if middleRight[0] == maxSideDistance-30:
+        if middleRight[0] < maxSideDistance-30:
             rightConcaved = True
 
-        while middleTop[1] < 30 and self.image[middleTop[1],middleTop[0]] < 200:
+        while middleTop[1] < maxSideDistance-1 and self.image[middleTop[1],middleTop[0]] < 200:
             # move rightward
             middleTop[1] += 1
-        if middleTop[1] == 30:
+        if middleTop[1] > 30:
             topConcaved = True
 
         # after cropping and warping, the 4 midpoints of the board will be the 4 midpoints of the image
         # top left quadrant
-        warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
-        originalPoints = np.array([[0, 0],middleTop, middleLeft, [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+        warpedPoints = None
+        originalPoints = None
+        if topConcaved and leftConcaved:
+            warpedPoints = np.array([[0, 0], [maxSideDistance//2, 50], [50, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([[0, 0],middleTop, middleLeft, [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+        elif topConcaved and not leftConcaved:
+            warpedPoints = np.array([[0, 0], [maxSideDistance//2, 50], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([[0, 0],middleTop, middleLeft, [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+        elif not topConcaved and leftConcaved:
+            warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [50, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([[0, 0],middleTop, middleLeft, [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+        else:
+            warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([[0, 0],middleTop, middleLeft, [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
         M = cv2.getPerspectiveTransform(originalPoints, warpedPoints)
         quadrantTopLeft = cv2.warpPerspective(self.image, M, (int(maxSideDistance//2), int(maxSideDistance//2)) )
 
         # top right quadrant
-        warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
-        originalPoints = np.array([middleTop, [maxSideDistance - 1, 0], [maxSideDistance//2, maxSideDistance//2], middleRight], dtype='float32')
+        if topConcaved and rightConcaved:
+            warpedPoints = np.array([[0, 50], [maxSideDistance//2, 0], [0, maxSideDistance//2], [(maxSideDistance//2)-50, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([middleTop, [maxSideDistance - 1, 0], [maxSideDistance//2, maxSideDistance//2], middleRight], dtype='float32')
+        elif topConcaved and not rightConcaved:
+            warpedPoints = np.array([[0, 50], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([middleTop, [maxSideDistance - 1, 0], [maxSideDistance//2, maxSideDistance//2], middleRight], dtype='float32')
+        elif not topConcaved and rightConcaved:
+            warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [(maxSideDistance//2)-50, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([middleTop, [maxSideDistance - 1, 0], [maxSideDistance//2, maxSideDistance//2], middleRight], dtype='float32')
+        else:
+            warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([middleTop, [maxSideDistance - 1, 0], [maxSideDistance//2, maxSideDistance//2], middleRight], dtype='float32')
         M = cv2.getPerspectiveTransform(originalPoints, warpedPoints)
         quadrantTopRight = cv2.warpPerspective(self.image, M, (int(maxSideDistance//2), int(maxSideDistance//2)) )
 
         # bottom left quadrant
-        warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
-        originalPoints = np.array([middleLeft, [maxSideDistance//2, maxSideDistance//2], [0, maxSideDistance - 1], middleBottom], dtype='float32')
+        if bottomConcaved and leftConcaved:
+            warpedPoints = np.array([[50, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, (maxSideDistance//2)-50]], dtype='float32')
+            originalPoints = np.array([middleLeft, [maxSideDistance//2, maxSideDistance//2], [0, maxSideDistance - 1], middleBottom], dtype='float32')
+        elif bottomConcaved and not leftConcaved:
+            warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, (maxSideDistance//2)-50]], dtype='float32')
+            originalPoints = np.array([middleLeft, [maxSideDistance//2, maxSideDistance//2], [0, maxSideDistance - 1], middleBottom], dtype='float32')
+        elif not bottomConcaved and leftConcaved:
+            warpedPoints = np.array([[50, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([middleLeft, [maxSideDistance//2, maxSideDistance//2], [0, maxSideDistance - 1], middleBottom], dtype='float32')
+        else:
+            warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([middleLeft, [maxSideDistance//2, maxSideDistance//2], [0, maxSideDistance - 1], middleBottom], dtype='float32')
         M = cv2.getPerspectiveTransform(originalPoints, warpedPoints)
         quadrantBottomLeft = cv2.warpPerspective(self.image, M, (int(maxSideDistance//2), int(maxSideDistance//2)) )
 
         # bottom right quadrant
-        warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
-        originalPoints = np.array([[maxSideDistance//2, maxSideDistance//2], middleRight, middleBottom, [maxSideDistance - 1, maxSideDistance - 1]], dtype='float32')
+        if bottomConcaved and rightConcaved:
+            warpedPoints = np.array([[0, 0], [(maxSideDistance//2)-50, 0], [0, (maxSideDistance//2)-50], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([[maxSideDistance//2, maxSideDistance//2], middleRight, middleBottom, [maxSideDistance - 1, maxSideDistance - 1]], dtype='float32')
+        elif bottomConcaved and not rightConcaved:
+            warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [0, (maxSideDistance//2)-50], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([[maxSideDistance//2, maxSideDistance//2], middleRight, middleBottom, [maxSideDistance - 1, maxSideDistance - 1]], dtype='float32')
+        elif not bottomConcaved and rightConcaved:
+            warpedPoints = np.array([[0, 0], [(maxSideDistance//2)-50, 0], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([[maxSideDistance//2, maxSideDistance//2], middleRight, middleBottom, [maxSideDistance - 1, maxSideDistance - 1]], dtype='float32')
+        else:
+            warpedPoints = np.array([[0, 0], [maxSideDistance//2, 0], [0, maxSideDistance//2], [maxSideDistance//2, maxSideDistance//2]], dtype='float32')
+            originalPoints = np.array([[maxSideDistance//2, maxSideDistance//2], middleRight, middleBottom, [maxSideDistance - 1, maxSideDistance - 1]], dtype='float32')
         M = cv2.getPerspectiveTransform(originalPoints, warpedPoints)
         quadrantBottomRight = cv2.warpPerspective(self.image, M, (int(maxSideDistance//2), int(maxSideDistance//2)) )
 
@@ -231,21 +290,42 @@ class SudokuCV():
         bottomHalf = np.concatenate((quadrantBottomLeft, quadrantBottomRight), axis=1)
         self.image = np.concatenate((topHalf, bottomHalf), axis=0)
 
+    # crop out all 81 cells and
+    # run each cell image through the convolutional network
+    def runCNN(self, model):
+        print(self.board)
 
-        cv2.imshow('Cropped and Warped Image', self.image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        cellSize = 450//9
+        for j in range(9):
 
+            for i in range(9):
+                topLeft = (i * cellSize, j * cellSize)
+                bottomRight = ((i + 1) * cellSize, (j + 1) * cellSize)
+                cellImage = self.image[topLeft[0]:bottomRight[0], topLeft[1]:bottomRight[1]]
+                numberImageZoom = self.image[topLeft[0]+10:bottomRight[0]-10, topLeft[1]+10:bottomRight[1]-10]
+                numberImage = self.image[topLeft[0]+5:bottomRight[0]-5, topLeft[1]+5:bottomRight[1]-5]
 
-# crop out all 81 cells
-# run each cell image through the convolutional network
+                # count white pixels
+                sumOfWhitePixels = 0
+                for x in range(len(numberImageZoom[0])):
+                    for y in range(len(numberImageZoom)):
+                        if numberImageZoom[x][y] > 127:
+                            sumOfWhitePixels += 1
+
+                # if there are more than 10% white pixel
+                if sumOfWhitePixels > ((cellSize-20)**2)*0.05:
+                    #modelPrediction = model.predict_classes(numberImage,verbose=0)
+                    #print(modelPrediction[0])
+                    cv2.imshow('Cropped and Warped Image', numberImage)
+                    cv2.waitKey(0)
+                    cv2.destroyAllWindows()
+
 
 def main():
     if len(sys.argv) != 2:
         return
     else:
         sudoku = SudokuCV(sys.argv[1])
-
 
 if __name__ == '__main__':
     main()
