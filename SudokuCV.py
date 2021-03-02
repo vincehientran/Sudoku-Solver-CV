@@ -358,8 +358,12 @@ class SudokuCV():
                     cellImage = cellImage.reshape((1, 28, 28, 1))
                     cellImage = cellImage.astype('float32') / 255
                     modelPrediction = model.predict_classes(cellImage,verbose=0)
-
-                    print('\n\n',modelPrediction[0],'\n\n')
+                    val = modelPrediction[0]
+                    # print(val)
+                    '''userInput = input('Enter number: ')
+                    while len(userInput) == 0:
+                        userInput = input('Enter number: ')
+                    self.board[i][j] = int(userInput)'''
 
                     cv2.imshow('Cropped and Warped Image', temp)
                     key = cv2.waitKey(0)
@@ -368,13 +372,20 @@ class SudokuCV():
                         return
                     else:
                         cv2.destroyAllWindows()
+                        userInput = input('Enter number: ')
+                        while len(userInput) == 0:
+                            userInput = input('Enter number: ')
+                        self.board[i][j] = int(userInput)
+        print(self.board)
 
+    def getBoard(self):
+        board = self.board.tolist()
 
-def main():
-    if len(sys.argv) != 2:
-        return
-    else:
-        sudoku = SudokuCV(sys.argv[1])
+        for row in range(len(board)):
+            for col in range(len(board[0])):
+                if board[row][col] == 0:
+                    board[row][col] = '.'
+                else:
+                    board[row][col] = str(board[row][col])
 
-if __name__ == '__main__':
-    main()
+        return board
