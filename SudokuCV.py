@@ -318,7 +318,7 @@ class SudokuCV():
     # crop out all 81 cells and
     # run each cell image through the convolutional network
     def runCNN(self, model):
-        print(self.board)
+        #print(self.board)
 
         cellSize = 450//9
         for i in range(9):
@@ -352,36 +352,63 @@ class SudokuCV():
                     temp = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_LINEAR)
                     cellImage = cellImage.reshape((1, 1, 28, 28))
                     cellImage = cellImage.astype('float32') / 255
-                    cellImage = ToTensor()(cellImage).unsqueeze(0)
+                    cellImage = torch.from_numpy(cellImage)
 
+                    # predict
                     if(torch.cuda.is_available()):
                         cellImage = cellImage.cuda()
                         label = label.cuda()
 
-                    pred = model(cellImage)
-                    pred = torch.nn.functional.softmax(pred, dim=1)
+                    val = None
+                    confidence = 0
 
-                    for i, p in enumerate(pred):
-                        if label[i] == torch.max(p.data, 0)[1]:
-                            print(label[i])
+                    maxIteration = 100
+                    iteration = 0
+                    while confidence < 0.98 and iteration < maxIteration:
+                        pred = model(cellImage)
+                        pred = torch.nn.functional.softmax(pred, dim=1)
+
+                        for _, p in enumerate(pred):
+                            val = torch.max(p.data, 0)[1]
+                            #print(val.item())
+                            confidence = p[val.item()].item()
+                            #print(confidence)
+
+                        iteration += 1
+
+                    if confidence < 0.8:
+                        cv2.imshow('Cropped and Warped Image', temp)
+                        key = cv2.waitKey(0)
+                        cv2.destroyAllWindows()
+                        userInput = input('Enter number: ')
+                        while len(userInput) == 0:
+                            userInput = input('Enter number: ')
+                        self.board[i][j] = int(userInput)
+                    else:
+                        self.board[i][j] = val
                     # print(val)
                     '''userInput = input('Enter number: ')
                     while len(userInput) == 0:
                         userInput = input('Enter number: ')
                     self.board[i][j] = int(userInput)'''
 
-                    cv2.imshow('Cropped and Warped Image', temp)
+                    '''cv2.imshow('Cropped and Warped Image', temp)
                     key = cv2.waitKey(0)
                     if key == ord('q'):
                         cv2.destroyAllWindows()
                         return
                     else:
                         cv2.destroyAllWindows()
+
+                        # ask for user input for incorrect predictions
                         userInput = input('Enter number: ')
                         while len(userInput) == 0:
                             userInput = input('Enter number: ')
-                        self.board[i][j] = int(userInput)
+                        self.board[i][j] = int(userInput)'''
+        
+        print('\nBoard Detected: ')
         print(self.board)
+        print('')
 
     def getBoard(self):
         board = self.board.tolist()

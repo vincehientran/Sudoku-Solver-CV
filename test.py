@@ -34,10 +34,10 @@ for itr, (image, label) in enumerate(test_dataloader):
             image = image.cuda()
             label = label.cuda()
 
-        test = image
+
         pred = model(image)
         pred = torch.nn.functional.softmax(pred, dim=1)
-
+        test = pred
         for i, p in enumerate(pred):
             if label[i] == torch.max(p.data, 0)[1]:
                 total = total + 1
