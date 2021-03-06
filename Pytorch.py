@@ -2,7 +2,7 @@ import torch
 from torchvision import transforms
 import torchvision.datasets as datasets
 import matplotlib.pyplot as plt
-from model import Model
+from Model import Model
 import numpy as np
 
 from six.moves import urllib
@@ -11,8 +11,8 @@ opener.addheaders = [('User-agent', 'Mozilla/5.0')]
 urllib.request.install_opener(opener)
 
 # peprare data set
-trainset = datasets.MNIST(root='./data', train=True, download=False, transform=transforms.Compose([transforms.ToTensor()]))
-testset = datasets.MNIST(root = './data', train = False, download =False, transform = transforms.Compose([transforms.ToTensor()]))
+trainset = datasets.MNIST(root='./data', train=True, download=True, transform=transforms.Compose([transforms.ToTensor()]))
+testset = datasets.MNIST(root = './data', train = False, download =True, transform = transforms.Compose([transforms.ToTensor()]))
 valset , testset0 = torch.utils.data.random_split(testset,[int(0.9*len(testset)), int(0.1*len(testset))])
 
 train_dataloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)

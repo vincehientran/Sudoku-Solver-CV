@@ -1,14 +1,12 @@
 import cv2
 import numpy as np
 import sys
-from keras.models import model_from_json
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import Dropout
-from keras.layers import Flatten
-from keras.layers.convolutional import Conv2D
-from keras.layers.convolutional import MaxPooling2D
-from keras.utils import np_utils
+
+import torch
+from torchvision import transforms
+import torchvision.datasets as datasets
+from torchvision.transforms import ToTensor
+from Model import Model
 
 class SudokuCV():
     def __init__(self, imageName):
@@ -20,11 +18,8 @@ class SudokuCV():
         cornersAndMidPoints = self.findCornersAndMidpoints(contour)
         self.cropAndWarp(cornersAndMidPoints)
 
-        json = open('model.json', 'r')
-        loadedModelJson = json.read()
-        json.close()
-        model = model_from_json(loadedModelJson)
-        model.load_weights("model.h5")
+        model = Model()
+        model.load_state_dict(torch.load("model.dth"))
 
         self.runCNN(model)
 
@@ -355,10 +350,20 @@ class SudokuCV():
 
                     cellImage = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_LINEAR)
                     temp = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_LINEAR)
-                    cellImage = cellImage.reshape((1, 28, 28, 1))
+                    cellImage = cellImage.reshape((1, 1, 28, 28))
                     cellImage = cellImage.astype('float32') / 255
-                    modelPrediction = model.predict_classes(cellImage,verbose=0)
-                    val = modelPrediction[0]
+                    cellImage = ToTensor()(cellImage).unsqueeze(0)
+
+                    if(torch.cuda.is_available()):
+                        cellImage = cellImage.cuda()
+                        label = label.cuda()
+
+                    pred = model(cellImage)
+                    pred = torch.nn.functional.softmax(pred, dim=1)
+
+                    for i, p in enumerate(pred):
+                        if label[i] == torch.max(p.data, 0)[1]:
+                            print(label[i])
                     # print(val)
                     '''userInput = input('Enter number: ')
                     while len(userInput) == 0:
