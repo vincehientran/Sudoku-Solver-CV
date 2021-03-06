@@ -8,11 +8,11 @@ def main():
         return
     else:
         sudoku = SudokuCV(sys.argv[1])
-        board = sudoku.getBoard()
         solution = Solution()
-        solution.solveSudoku(board)
+        solution.solveSudoku(sudoku)
+
         print('\nSolution')
-        print(np.array(board).astype(np.int8))
+        print(np.array(solution.getBoard()).astype(np.int8))
 
 if __name__ == '__main__':
     main()

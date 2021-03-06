@@ -11,12 +11,12 @@ from Model import Model
 class SudokuCV():
     def __init__(self, imageName):
         self.board = np.zeros((9,9), dtype=int)
-        image = cv2.imread(imageName)
-        self.image = cv2.resize(image, (450,450), interpolation = cv2.INTER_AREA)
+        self.original = cv2.imread(imageName)
+        self.image = np.copy(self.original)
         self.extractBoard()
         contour = self.boardContour(self.image)
-        cornersAndMidPoints = self.findCornersAndMidpoints(contour)
-        self.cropAndWarp(cornersAndMidPoints)
+        self.cornersAndMidPoints = self.findCornersAndMidpoints(contour)
+        self.cropAndWarp(self.cornersAndMidPoints)
 
         model = Model()
         model.load_state_dict(torch.load("model.dth"))
@@ -26,7 +26,7 @@ class SudokuCV():
     # extract the sudoku board from the image
     def extractBoard(self):
         grayscaleImage = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        gaussianThreshold = cv2.adaptiveThreshold(grayscaleImage,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,51,10)
+        gaussianThreshold = cv2.adaptiveThreshold(grayscaleImage,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,71,15)
         self.image = gaussianThreshold
 
     # find the contour of the largest square
@@ -321,6 +321,8 @@ class SudokuCV():
         #print(self.board)
 
         cellSize = 450//9
+        transparent_img = np.zeros((450, 450, 4), dtype=np.uint8)
+
         for i in range(9):
 
             for j in range(9):
@@ -339,8 +341,8 @@ class SudokuCV():
                         if numberImageZoom[x][y] > 127:
                             sumOfWhitePixels += 1
 
-                # if there are more than 5% white pixel, then predict the number using the CNN
-                if sumOfWhitePixels > ((cellSize-20)**2)*0.05:
+                # if there are more than 3% white pixel, then predict the number using the CNN
+                if sumOfWhitePixels > ((cellSize-20)**2)*0.03:
                     #cellImage = cv2.GaussianBlur(cellImage,(3,3),0)
 
                     ''' # zoom out number???
@@ -348,8 +350,9 @@ class SudokuCV():
                     base=np.zeros((h+10,w+10), np.uint8)
                     base[5:h+5,5:w+5] = cellImage'''
 
-                    cellImage = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_LINEAR)
-                    temp = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_LINEAR)
+
+                    cellImage = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_NEAREST)
+                    temp = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_NEAREST)
                     cellImage = cellImage.reshape((1, 1, 28, 28))
                     cellImage = cellImage.astype('float32') / 255
                     cellImage = torch.from_numpy(cellImage)
@@ -376,7 +379,8 @@ class SudokuCV():
 
                         iteration += 1
 
-                    if confidence < 0.8:
+                    if val == 0 or confidence < 0.8:
+                        temp = cv2.resize(temp, (450, 450), interpolation = cv2.INTER_NEAREST)
                         cv2.imshow('Cropped and Warped Image', temp)
                         key = cv2.waitKey(0)
                         cv2.destroyAllWindows()
@@ -386,6 +390,8 @@ class SudokuCV():
                         self.board[i][j] = int(userInput)
                     else:
                         self.board[i][j] = val
+
+
                     # print(val)
                     '''userInput = input('Enter number: ')
                     while len(userInput) == 0:
@@ -405,10 +411,11 @@ class SudokuCV():
                         while len(userInput) == 0:
                             userInput = input('Enter number: ')
                         self.board[i][j] = int(userInput)'''
-        
+
         print('\nBoard Detected: ')
         print(self.board)
         print('')
+
 
     def getBoard(self):
         board = self.board.tolist()
@@ -421,3 +428,6 @@ class SudokuCV():
                     board[row][col] = str(board[row][col])
 
         return board
+
+    def getImageAndContours(self):
+        return self.original, self.cornersAndMidPoints
