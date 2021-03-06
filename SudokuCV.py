@@ -343,16 +343,9 @@ class SudokuCV():
 
                 # if there are more than 3% white pixel, then predict the number using the CNN
                 if sumOfWhitePixels > ((cellSize-20)**2)*0.03:
-                    #cellImage = cv2.GaussianBlur(cellImage,(3,3),0)
 
-                    ''' # zoom out number???
-                    h,w = cellImage.shape[0:2]
-                    base=np.zeros((h+10,w+10), np.uint8)
-                    base[5:h+5,5:w+5] = cellImage'''
-
-
-                    cellImage = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_NEAREST)
-                    temp = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_NEAREST)
+                    cellImage = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_LINEAR)
+                    temp = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_LINEAR)
                     cellImage = cellImage.reshape((1, 1, 28, 28))
                     cellImage = cellImage.astype('float32') / 255
                     cellImage = torch.from_numpy(cellImage)
@@ -365,7 +358,9 @@ class SudokuCV():
                     val = None
                     confidence = 0
 
-                    maxIteration = 100
+                    # makes predictions until it is at least 98% confident
+                    # or until it has made 5 failed predictions
+                    maxIteration = 5
                     iteration = 0
                     while confidence < 0.98 and iteration < maxIteration:
                         pred = model(cellImage)
@@ -379,6 +374,8 @@ class SudokuCV():
 
                         iteration += 1
 
+                    # if the model is not confident on its prediction
+                    # then the user will enter in the value
                     if val == 0 or confidence < 0.8:
                         temp = cv2.resize(temp, (450, 450), interpolation = cv2.INTER_NEAREST)
                         cv2.imshow('Cropped and Warped Image', temp)
@@ -390,27 +387,6 @@ class SudokuCV():
                         self.board[i][j] = int(userInput)
                     else:
                         self.board[i][j] = val
-
-
-                    # print(val)
-                    '''userInput = input('Enter number: ')
-                    while len(userInput) == 0:
-                        userInput = input('Enter number: ')
-                    self.board[i][j] = int(userInput)'''
-
-                    '''cv2.imshow('Cropped and Warped Image', temp)
-                    key = cv2.waitKey(0)
-                    if key == ord('q'):
-                        cv2.destroyAllWindows()
-                        return
-                    else:
-                        cv2.destroyAllWindows()
-
-                        # ask for user input for incorrect predictions
-                        userInput = input('Enter number: ')
-                        while len(userInput) == 0:
-                            userInput = input('Enter number: ')
-                        self.board[i][j] = int(userInput)'''
 
         print('\nBoard Detected: ')
         print(self.board)
