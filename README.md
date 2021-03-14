@@ -1,3 +1,9 @@
 # Sudoku-Solver-CV
  
-https://towardsdatascience.com/mnist-handwritten-digits-classification-using-a-convolutional-neural-network-cnn-af5fafbc35e9#_=_
+CNN code is from this [website](https://towardsdatascience.com/mnist-handwritten-digits-classification-using-a-convolutional-neural-network-cnn-af5fafbc35e9#_=_)
+
+## Execution
+
+```
+$ python MainRunner.py image.jpg
+```
