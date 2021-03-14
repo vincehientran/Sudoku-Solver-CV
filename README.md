@@ -9,5 +9,5 @@ $ python MainRunner.py image.jpg
 ```
 
 ## Results
-<img src="test10.jpg" align="left" height="800" width="400">
-<img src="solution.jpg" align="left" height="800" width="400">
+<img src="test10.jpg" align="left" height="600" width="300">
+<img src="solution.jpg" align="left" height="600" width="300">
