@@ -9,5 +9,5 @@ $ python MainRunner.py image.jpg
 ```
 
 ## Results
-![Image of sudoku board before execution](image10.jpg)
-![Image of sudoku board after execution](solution.jpg)
+<img src="test10.jpg" align="left" height="800" width="400">
+<img src="solution.jpg" align="left" height="800" width="400">
