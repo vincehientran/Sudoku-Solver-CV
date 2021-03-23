@@ -5,7 +5,7 @@ CNN code is from this [website](https://towardsdatascience.com/mnist-handwritten
 
 ## Execution
 ```
-$ python MainRunner.py image.jpg
+$ python MainRunner.py test10.jpg
 ```
 
 ## Results
