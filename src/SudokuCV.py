@@ -1,12 +1,7 @@
 import cv2
 import numpy as np
 import sys
-
-import torch
-from torchvision import transforms
-import torchvision.datasets as datasets
-from torchvision.transforms import ToTensor
-from Model import Model
+import tensorflow as tf
 
 class SudokuCV():
     def __init__(self, imageName):
@@ -18,10 +13,9 @@ class SudokuCV():
         self.cornersAndMidPoints = self.findCornersAndMidpoints(contour)
         self.cropAndWarp(self.cornersAndMidPoints)
 
-        model = Model()
-        model.load_state_dict(torch.load("model.dth"))
+        model = tf.keras.models.load_model('tensorflow_number_model')
 
-        self.runCNN(model)
+        self.selfPredicted = self.runCNN(model)
 
     # extract the sudoku board from the image
     def extractBoard(self):
@@ -297,7 +291,7 @@ class SudokuCV():
         horizontal = (255-horizontal)
         horizontal = cv2.threshold(horizontal,250,255,cv2.THRESH_BINARY)[1]
 
-        # make a mask for the horizontal lines
+        # make a mask for the vertical lines
         rows = vertical.shape[0]
         verticalsize = rows // 10
         verticalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (1, verticalsize))
@@ -318,6 +312,7 @@ class SudokuCV():
     # crop out all 81 cells and
     # run each cell image through the convolutional network
     def runCNN(self, model):
+        selfPredicted = []
         #print(self.board)
 
         cellSize = 450//9
@@ -328,8 +323,8 @@ class SudokuCV():
             for j in range(9):
 
                 # crop out the cell
-                topLeft = (i * cellSize, j * cellSize)
-                bottomRight = ((i + 1) * cellSize, (j + 1) * cellSize)
+                topLeft = (i * cellSize + 5, j * cellSize + 5)
+                bottomRight = ((i + 1) * cellSize  - 5, (j + 1) * cellSize  - 5)
                 cellImage = self.image[topLeft[0]:bottomRight[0], topLeft[1]:bottomRight[1]]
                 numberImageZoom = self.image[topLeft[0]+10:bottomRight[0]-10, topLeft[1]+10:bottomRight[1]-10]
                 numberImage = self.image[topLeft[0]+5:bottomRight[0]-5, topLeft[1]+5:bottomRight[1]-5]
@@ -343,40 +338,21 @@ class SudokuCV():
 
                 # if there are more than 3% white pixel, then predict the number using the CNN
                 if sumOfWhitePixels > ((cellSize-20)**2)*0.03:
-
+                    cellImage = cv2.GaussianBlur(cellImage,(1,1),1)
                     cellImage = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_LINEAR)
                     temp = cv2.resize(cellImage, (28, 28), interpolation = cv2.INTER_LINEAR)
-                    cellImage = cellImage.reshape((1, 1, 28, 28))
+                    cellImage = cellImage.reshape((1, 28, 28, 1))
                     cellImage = cellImage.astype('float32') / 255
-                    cellImage = torch.from_numpy(cellImage)
-
-                    # predict
-                    if(torch.cuda.is_available()):
-                        cellImage = cellImage.cuda()
-                        label = label.cuda()
 
                     val = None
                     confidence = 0
-
-                    # makes predictions until it is at least 98% confident
-                    # or until it has made 5 failed predictions
-                    maxIteration = 5
-                    iteration = 0
-                    while confidence < 0.98 and iteration < maxIteration:
-                        pred = model(cellImage)
-                        pred = torch.nn.functional.softmax(pred, dim=1)
-
-                        for _, p in enumerate(pred):
-                            val = torch.max(p.data, 0)[1]
-                            #print(val.item())
-                            confidence = p[val.item()].item()
-                            #print(confidence)
-
-                        iteration += 1
+                    prediction = model.predict([cellImage])
+                    val = np.argmax(prediction[0])
+                    confidence = prediction[0][val]
 
                     # if the model is not confident on its prediction
                     # then the user will enter in the value
-                    if val == 0 or confidence < 0.8:
+                    if val == 0 or confidence < 0.95:
                         temp = cv2.resize(temp, (450, 450), interpolation = cv2.INTER_NEAREST)
                         cv2.imshow('Cropped and Warped Image', temp)
                         key = cv2.waitKey(0)
@@ -386,12 +362,14 @@ class SudokuCV():
                             userInput = input('Enter number: ')
                         self.board[i][j] = int(userInput)
                     else:
+                        selfPredicted.append((i,j))
                         self.board[i][j] = val
 
-        print('\nBoard Detected: ')
-        print(self.board)
-        print('')
+                    print('value', val)
+                    print('confidence', confidence, '\n')
 
+        print(self.board)
+        return selfPredicted
 
     def getBoard(self):
         board = self.board.tolist()
