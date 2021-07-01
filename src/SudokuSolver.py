@@ -52,7 +52,7 @@ class Solution(object):
         b, g, r = cv2.split(transparent_img)
         rgba = [b,g,r, alpha]
         dst = cv2.merge(rgba,4)
-        cv2.imwrite("test.png", dst)
+        cv2.imwrite("solution_overlay.png", dst)
 
         # Extract the alpha mask of the png image
         b,g,r,a = cv2.split(dst)
